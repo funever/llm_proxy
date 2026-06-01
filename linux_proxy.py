@@ -133,8 +133,10 @@ async def forward_request(request: Request):
             pass
 
     try:
+        resp_content_type = ""
+
         if is_stream:
-            # streaming response
+            # SSE streaming response (stream=true in request body)
             client = httpx.AsyncClient(timeout=httpx.Timeout(300.0))
             req = client.build_request(method, target, content=body, headers=forward_headers)
             resp = await client.send(req, stream=True)
@@ -169,34 +171,53 @@ async def forward_request(request: Request):
             )
 
         else:
-            # non-streaming request
+            # non-streaming request: could be JSON, multipart, or binary
             async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
                 resp = await client.request(method, target, content=body, headers=forward_headers)
 
-            resp_body = resp.text
+            resp_content_type = resp.headers.get("content-type", "")
+            is_multipart = "multipart/" in resp_content_type
+            is_binary = any(t in resp_content_type for t in ["application/octet-stream", "image/"])
+
             logger.info(f"<<< {resp.status_code}")
             logger.info("[Response Headers]")
             for k, v in resp.headers.items():
                 if k.lower() not in ("transfer-encoding", "connection"):
                     logger.info(f"  {k}: {v}")
-            logger.info("[Response Body]")
-            logger.info(format_json(resp_body))
 
             response_headers = {}
             for k, v in resp.headers.items():
                 if k.lower() not in ("transfer-encoding", "connection", "content-length"):
                     response_headers[k] = v
 
-            try:
-                resp_json = json.loads(resp_body) if resp_body else {}
-            except Exception:
-                resp_json = {"raw": resp_body}
+            if is_multipart or is_binary:
+                # multipart/binary: raw bytes passthrough, do NOT parse as text/JSON
+                resp_bytes = resp.content
+                logger.info(f"[Response Body] {resp_content_type}, {len(resp_bytes)} bytes (raw passthrough)")
 
-            return JSONResponse(
-                content=resp_json,
-                status_code=resp.status_code,
-                headers=response_headers,
-            )
+                from starlette.responses import Response
+                return Response(
+                    content=resp_bytes,
+                    status_code=resp.status_code,
+                    headers=response_headers,
+                    media_type=resp_content_type,
+                )
+            else:
+                # normal JSON response
+                resp_body = resp.text
+                logger.info("[Response Body]")
+                logger.info(format_json(resp_body))
+
+                try:
+                    resp_json = json.loads(resp_body) if resp_body else {}
+                except Exception:
+                    resp_json = {"raw": resp_body}
+
+                return JSONResponse(
+                    content=resp_json,
+                    status_code=resp.status_code,
+                    headers=response_headers,
+                )
 
     except httpx.ConnectError as e:
         logger.error(f"[Error] cannot connect to target: {e}")

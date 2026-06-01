@@ -142,14 +142,20 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
                     continue
 
                 resp_body = resp.read()
+                resp_content_type = resp.getheader("Content-Type", "")
 
                 add_log(f"<<< {resp.status} {resp.reason}")
                 add_log("[Response Headers]")
                 for k, v in resp.getheaders():
                     if k.lower() not in ("transfer-encoding", "connection"):
                         add_log(f"  {k}: {v}")
-                add_log("[Response Body]")
-                add_log(format_json(resp_body))
+
+                # log response body: multipart as size summary, others as formatted
+                if "multipart/" in resp_content_type:
+                    add_log(f"[Response Body] multipart, {len(resp_body)} bytes (raw binary, not logged)")
+                else:
+                    add_log("[Response Body]")
+                    add_log(format_json(resp_body))
 
                 self.send_response(resp.status)
                 for key, val in resp.getheaders():
