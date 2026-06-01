@@ -135,37 +135,38 @@ async def forward_request(request: Request):
     try:
         if is_stream:
             # streaming response
-            async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
-                async with client.stream(method, target, content=body, headers=forward_headers) as resp:
-                    logger.info(f"<<< {resp.status_code} (streaming)")
-                    logger.info("[Response Headers]")
-                    for k, v in resp.headers.items():
-                        if k.lower() not in ("transfer-encoding", "connection"):
-                            logger.info(f"  {k}: {v}")
+            client = httpx.AsyncClient(timeout=httpx.Timeout(300.0))
+            req = client.build_request(method, target, content=body, headers=forward_headers)
+            resp = await client.send(req, stream=True)
 
-                    async def stream_generator():
-                        chunk_count = 0
-                        collected = ""
-                        try:
-                            async for chunk in resp.aiter_bytes():
-                                chunk_count += 1
-                                chunk_text = chunk.decode("utf-8", errors="replace")
-                                collected += chunk_text
-                                yield chunk
-                        finally:
-                            logger.info(f"[Streaming] {chunk_count} chunks sent")
+            logger.info(f"<<< {resp.status_code} (streaming)")
+            logger.info("[Response Headers]")
+            for k, v in resp.headers.items():
+                if k.lower() not in ("transfer-encoding", "connection"):
+                    logger.info(f"  {k}: {v}")
 
-                    response_headers = {}
-                    for k, v in resp.headers.items():
-                        if k.lower() not in ("transfer-encoding", "connection", "content-length"):
-                            response_headers[k] = v
+            response_headers = {}
+            for k, v in resp.headers.items():
+                if k.lower() not in ("transfer-encoding", "connection", "content-length"):
+                    response_headers[k] = v
 
-                    return StreamingResponse(
-                        stream_generator(),
-                        status_code=resp.status_code,
-                        headers=response_headers,
-                        media_type=resp.headers.get("content-type", "text/event-stream"),
-                    )
+            async def stream_generator():
+                chunk_count = 0
+                try:
+                    async for chunk in resp.aiter_bytes():
+                        chunk_count += 1
+                        yield chunk
+                finally:
+                    logger.info(f"[Streaming] {chunk_count} chunks sent")
+                    await resp.aclose()
+                    await client.aclose()
+
+            return StreamingResponse(
+                stream_generator(),
+                status_code=resp.status_code,
+                headers=response_headers,
+                media_type=resp.headers.get("content-type", "text/event-stream"),
+            )
 
         else:
             # non-streaming request
