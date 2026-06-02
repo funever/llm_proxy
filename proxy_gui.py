@@ -221,9 +221,8 @@ class LLMProxyApp:
         url_frame.pack(fill=tk.X, padx=8, pady=(8, 4))
 
         self.url_var = tk.StringVar(value=DEFAULT_BASE_URL)
-        self.url_entry = ttk.Entry(url_frame, textvariable=self.url_var)
+        self.url_entry = tk.Entry(url_frame, textvariable=self.url_var, font=("Consolas", 9), state="disabled")
         self.url_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
-        self.url_entry.config(state="readonly")
 
         self.url_edit_btn = ttk.Button(url_frame, text="Edit", width=6, command=self._toggle_url_edit)
         self.url_edit_btn.pack(side=tk.LEFT)
@@ -298,11 +297,12 @@ class LLMProxyApp:
         clear_btn.place(relx=1.0, rely=0.0, x=-70, y=2)
 
     def _toggle_url_edit(self):
-        if self.url_entry.cget("state") == "readonly":
+        current_state = str(self.url_entry.cget("state"))
+        if current_state in ("disabled", "readonly"):
             self.url_entry.config(state="normal")
             self.url_edit_btn.config(text="Lock")
         else:
-            self.url_entry.config(state="readonly")
+            self.url_entry.config(state="disabled")
             self.url_edit_btn.config(text="Edit")
             ProxyHandler.target_base_url = self.url_var.get()
 
@@ -315,9 +315,6 @@ class LLMProxyApp:
     def _start_proxy(self):
         port = int(self.proxy_port_var.get())
         ProxyHandler.target_base_url = self.url_var.get()
-
-        self.url_entry.config(state="readonly")
-        self.url_edit_btn.config(text="Edit")
 
         try:
             self.server = ReusableTCPServer(("127.0.0.1", port), ProxyHandler)
@@ -400,13 +397,19 @@ class LLMProxyApp:
 
         # check cloudflared: first from app directory, then from PATH
         app_dir = os.path.dirname(os.path.abspath(__file__))
-        local_cloudflared = os.path.join(app_dir, "cloudflared.exe")
+        # Windows: cloudflared.exe, macOS/Linux: cloudflared
+        local_candidates = [
+            os.path.join(app_dir, "cloudflared"),
+            os.path.join(app_dir, "cloudflared.exe"),
+        ]
         cloudflared = shutil.which("cloudflared") or shutil.which("cloudflared.exe")
-        if os.path.isfile(local_cloudflared):
-            cloudflared = local_cloudflared
+        for candidate in local_candidates:
+            if os.path.isfile(candidate):
+                cloudflared = candidate
+                break
         if not cloudflared:
             add_log("[Tunnel] cloudflared not found")
-            add_log("[Tunnel] please download cloudflared.exe from:")
+            add_log("[Tunnel] please download cloudflared from:")
             add_log("[Tunnel]   https://github.com/cloudflare/cloudflared/releases/latest")
             add_log(f"[Tunnel] and put it in: {app_dir}")
             return
