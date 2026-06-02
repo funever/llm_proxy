@@ -72,7 +72,7 @@ python3 linux_proxy.py
 
 | 服务 | Base URL |
 |------|----------|
-| 百炼 GLM-5 | `https://codingxrui.geely-test.com/bailian/openai/v1` |
+| 内部大模型推理服务 | `https://your-internal-llm-service.example.com/v1` |
 | 本地 Ollama | `http://127.0.0.1:11434/v1` |
 | 本地 vLLM | `http://127.0.0.1:8012/v1` |
 | Mock 服务 | `http://127.0.0.1:8012/v1` |

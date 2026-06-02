@@ -26,15 +26,15 @@ from pathlib import Path
 from collections import deque
 
 # defaults
-DEFAULT_BASE_URL = "https://codingxrui.geely-test.com/bailian/openai/v1"
+DEFAULT_BASE_URL = "http://127.0.0.1:8012/v1"
 DEFAULT_PROXY_PORT = "18900"
 DEFAULT_DEVICE_PORT = "8900"
 DEFAULT_TUNNEL_PORT = "8013"
 
 EXTRA_HEADERS = {
-    "x-api-key": "sk_ind_test_biqzzhj9hmtnwpodd5",
-    "anthropic-version": "2023-06-01",
-    "Authorization": "Bearer sk_ind_test_biqzzhj9hmtnwpodd5",
+    "x-api-key": os.environ.get("LLM_API_KEY", ""),
+    "anthropic-version": os.environ.get("LLM_ANTHROPIC_VERSION", ""),
+    "Authorization": os.environ.get("LLM_AUTH_HEADER", ""),
 }
 
 SSL_CONTEXT = ssl.create_default_context()
